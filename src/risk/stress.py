@@ -16,3 +16,28 @@ def stress_portfolio(exposures: dict, scenarios=None):
         pnl=sum(exposures.get(k,0.0)*v for k,v in shocks.items())
         rows.append({"scenario":name,"portfolio_return":pnl,**shocks})
     return pd.DataFrame(rows)
+
+
+HISTORICAL_WINDOWS={
+    "global_financial_crisis":{"start":"2008-09-15","end":"2009-03-09"},
+    "covid_crash":{"start":"2020-02-19","end":"2020-03-23"},
+    "2022_rate_shock":{"start":"2022-01-03","end":"2022-10-12"},
+    "crypto_2022_deleveraging":{"start":"2022-05-01","end":"2022-11-21"},
+}
+
+def historical_window_stress(factor_returns: pd.DataFrame, exposures: dict, windows=None):
+    """Apply realized cumulative factor moves from named historical windows to current exposures."""
+    windows=windows or HISTORICAL_WINDOWS
+    rows=[]
+    x=factor_returns.copy()
+    x.index=pd.to_datetime(x.index)
+    for name,w in windows.items():
+        block=x.loc[w["start"]:w["end"]]
+        if block.empty:
+            rows.append({"scenario":name,"start":w["start"],"end":w["end"],"portfolio_return":float("nan"),"available":False})
+            continue
+        shocks=(1+block).prod()-1
+        pnl=sum(exposures.get(k,0.0)*float(v) for k,v in shocks.items())
+        rows.append({"scenario":name,"start":w["start"],"end":w["end"],"portfolio_return":pnl,"available":True,
+                     **{f"shock_{k}":float(v) for k,v in shocks.items()}})
+    return pd.DataFrame(rows)
